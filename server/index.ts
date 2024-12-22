@@ -2,12 +2,13 @@ require('dotenv').config()
 
 import { Resend } from 'resend';
 import express, { Request, Response } from 'express';
-import fs from 'fs';
+import {existsSync, createWriteStream, readFileSync} from 'fs';
+// @ts-ignore
 import path from 'path';
-import fastcsv from 'fast-csv';
+import {format} from 'fast-csv';
 
 
-const resend = new Resend('re_123456789');
+const resend = new Resend(process.env.RESEND_API_KEY);
 const app = express();
 
 // we would like that the contacts are stored as a csv
@@ -36,21 +37,21 @@ app.post('/append-csv', (req, res) => {
 
     // Ensure the CSV file exists, and if not, create it with headers
     const headers = Object.keys(data[0]);
-    const fileExists = fs.existsSync(csvFilePath);
+    const fileExists = existsSync(csvFilePath);
 
     try {
         if (!fileExists) {
             // Create the file and write headers if it doesn't exist
-            const writeStream = fs.createWriteStream(csvFilePath);
-            const csvWriteStream = fastcsv.format({ headers: true });
+            const writeStream = createWriteStream(csvFilePath);
+            const csvWriteStream = format({ headers: true });
             csvWriteStream.pipe(writeStream);
             csvWriteStream.write(data[0]); // Write first row to initialize headers
             csvWriteStream.end();
         }
 
         // Append rows to the CSV file
-        const csvWriteStream = fastcsv.format({ headers: false });
-        const writeStream = fs.createWriteStream(csvFilePath, { flags: 'a' });
+        const csvWriteStream = format({ headers: false });
+        const writeStream = createWriteStream(csvFilePath, { flags: 'a' });
 
         csvWriteStream.pipe(writeStream);
         data.forEach((row) => csvWriteStream.write(row));
@@ -65,20 +66,30 @@ app.post('/append-csv', (req, res) => {
 
 // GET route to download the CSV file
 app.get('/download-csv', (req, res) => {
-    if (!fs.existsSync(csvFilePath)) {
+    if (!existsSync(csvFilePath)) {
         return res.status(404).send('No CSV file found');
     }
 
     res.download(csvFilePath, 'contacts.csv');
 });
 
+
+const filepath = `${__dirname}/invoice.txt`;
+const attachment = readFileSync(filepath).toString('base64');
+
 app.get('/', async (req: Request, res: Response) => {
   try {
     const data = await resend.emails.send({
-      from: 'Acme <onboarding@resend.dev>',
-      to: ['delivered@resend.dev'],
+      from: 'onboarding@resend.dev',
+      to: 'sullemanhossam4@gmail.com',
       subject: 'Hello World',
       html: '<strong>it works!</strong>',
+      attachments: [
+          {
+            content: attachment,
+            filename: 'invoice.txt',
+          },
+        ],
     });
 
     res.status(200).json(data);
